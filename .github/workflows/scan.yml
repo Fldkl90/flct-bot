@@ -1,0 +1,46 @@
+name: FLCT Scanner
+
+on:
+  schedule:
+    # Her 15 dakikada bir. NOT: GitHub cron kesin degildir, birkac dk gecikebilir / yogunlukta atlanabilir.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      force_run:
+        description: "Tazelik kontrolunu atla (her zaman tara)"
+        required: false
+        default: "true"
+
+concurrency:
+  group: flct-scanner
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - name: Run scanner
+        run: python scanner.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # --- Cekirdek strateji ---
+          CORE_MODE: "td9"                 # td9 = lmBull + TD9 (+-1 bar)  [WaveTrend kullanilmiyor]
+          # --- Strateji / tarama ayarlari ---
+          TIMEFRAME: "1h"                 # 5m, 15m, 1h, 4h ...
+          MIN_VOLUME_USDT: "50000000"     # likidite filtresi (24s hacim)
+          MAX_CANDLE_AGE_MIN: "20"        # ayni sinyali tekrar atmamak icin dedup penceresi
+          MAX_WORKERS: "5"
+          # --- Divergence teyit filtresi ---
+          DIV_LOOKBACK: "3"               # son kac mum kontrol edilsin
+          MIN_DIV: "3"                    # minimum divergence sayisi
+          DIV_MODE: "perbar"              # perbar = bir mumda >=3 | cumulative = 3 muma yayilmis toplam >=3
+          SEND_HEARTBEAT: "false"
+          FORCE_RUN: ${{ github.event.inputs.force_run || 'false' }}
